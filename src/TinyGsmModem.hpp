@@ -11,6 +11,14 @@
 
 #include "TinyGsmCommon.h"
 
+typedef struct SignalQuality {
+    String sysmode;
+    int lte_rssi;
+    int lte_rsrp;
+    int lte_sinr;
+    int lte_rsrq;
+} signal_quality;
+
 template <class modemType>
 class TinyGsmModem {
  public:
@@ -81,7 +89,7 @@ class TinyGsmModem {
     return thisModem().waitForNetworkImpl(timeout_ms, check_signal);
   }
   // Gets signal quality report
-  int16_t getSignalQuality() {
+  signal_quality getSignalQuality() {
     return thisModem().getSignalQualityImpl();
   }
   String getLocalIP() {
@@ -207,13 +215,22 @@ class TinyGsmModem {
     return false;
   }
 
-  // Gets signal quality report according to 3GPP TS command AT+CSQ
-  int8_t getSignalQualityImpl() {
-    thisModem().sendAT(GF("+CSQ"));
-    if (thisModem().waitResponse(GF("+CSQ:")) != 1) { return 99; }
-    int8_t res = thisModem().streamGetIntBefore(',');
+  // Gets signal quality report according to 3GPP TS command AT+QCSQ
+  signal_quality getSignalQualityImpl() {
+    signal_quality sigq;
+    thisModem().sendAT(GF("+QCSQ"));
+    if (thisModem().waitResponse(GF("+QCSQ:")) != 1)
+    {
+      sigq.sysmode = "Error";
+      return sigq;
+    }
+    sigq.sysmode = thisModem().stream.readStringUntil(',');
+    sigq.lte_rssi = thisModem().stream.readStringUntil(',').toInt();
+    sigq.lte_rsrp = thisModem().stream.readStringUntil(',').toInt();
+    sigq.lte_sinr = thisModem().stream.readStringUntil(',').toInt();
+    sigq.lte_rsrq = thisModem().stream.readStringUntil('\r').toInt();
     thisModem().waitResponse();
-    return res;
+    return sigq;
   }
 
   String getLocalIPImpl() {
