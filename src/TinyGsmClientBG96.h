@@ -239,22 +239,22 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         return 0;
       at->stream.write(payload, strlen(payload));
       at->stream.flush();
-      if (at->waitResponse(5000, GF(GSM_NL "+QMTPUB:")) != 1)
+      if (at->waitResponse(5000, GF(GSM_NL "+QMTPUB: 0,0,0\r\n")) != 1)
         return 0;
-      at->stream.readStringUntil('\n');
+      // at->stream.readStringUntil('\n');
 
       String data;
       // Serial.println("Now waiting for pub response...");
-      int8_t result = at->waitResponse(2000, data);
+      int8_t result = at->waitResponse(5000, data, "}\"");
       //Serial.println("#0#");
       // Serial.println(result);
       // Serial.println(data.length());
       if (data.length()) //!result & 
       {
-        //Serial.println("#1#");
+        Serial.println("#1#");
         if (data.indexOf("+QMTRECV") != -1)
         {
-          //Serial.println("#2#");
+          Serial.println("#2#");
           // MQTT subscribed
           /*
            +QMTRECV: 0, 1,
