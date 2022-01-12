@@ -241,7 +241,6 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       at->stream.flush();
       if (at->waitResponse(5000, GF(GSM_NL "+QMTPUB: 0,0,0\r\n")) != 1)
         return 0;
-      // at->stream.readStringUntil('\n');
 
       String data;
       // Serial.println("Now waiting for pub response...");
@@ -251,10 +250,10 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       // Serial.println(data.length());
       if (data.length()) //!result & 
       {
-        Serial.println("#1#");
+        // Serial.println("#1#");
         if (data.indexOf("+QMTRECV") != -1)
         {
-          Serial.println("#2#");
+          // Serial.println("#2#");
           // MQTT subscribed
           /*
            +QMTRECV: 0, 1,
