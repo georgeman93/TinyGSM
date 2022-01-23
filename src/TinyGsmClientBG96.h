@@ -257,7 +257,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
           // MQTT subscribed
           /*
            +QMTRECV: 0, 1,
-           "$aws/things/methane_9FD97F0D/shadow/get/accepted",
+           "$aws/things/methane_9FD97F0D/shadow/get/accepted", /
            "{"state":{"desired":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":10},"reported":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":100},"delta":{"sleep_interval":10}},"metadata":{"desired":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}},"reported":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}}},"version":9,"timestamp":1626503353}"
           */
           int8_t topic_start = 0;
