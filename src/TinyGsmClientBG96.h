@@ -257,7 +257,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
           // MQTT subscribed
           /*
            +QMTRECV: 0, 1,
-           "$aws/things/methane_9FD97F0D/shadow/get/accepted", /
+           "$aws/things/methane_9FD97F0D/shadow/get/accepted",
            "{"state":{"desired":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":10},"reported":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":100},"delta":{"sleep_interval":10}},"metadata":{"desired":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}},"reported":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}}},"version":9,"timestamp":1626503353}"
           */
           int8_t topic_start = 0;
@@ -693,7 +693,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                   int* year = 0, int* month = 0, int* day = 0, int* hour = 0,
                   int* minute = 0, int* second = 0) {
     sendAT(GF("+QGPSLOC=2"));
-    if (waitResponse(10000L, GF(GSM_NL "+QGPSLOC:")) != 1) {
+    if (waitResponse(10000L, GF(GSM_NL "+QGPSLOC: ")) != 1) {
       // NOTE:  Will return an error if the position isn't fixed
       return false;
     }
@@ -730,7 +730,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     imonth = streamGetIntLength(2);    // Two digit month
     iyear  = streamGetIntBefore(',');  // Two digit year
 
-    iusat = streamGetIntBefore(',');  // Number of satellites,
+    iusat = streamGetIntBefore('\n');  // Number of satellites,
     streamSkipUntil('\n');  // The error code of the operation. If it is not
                             // 0, it is the type of error.
 
