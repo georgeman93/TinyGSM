@@ -156,36 +156,6 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       return at->waitResponse();
     }
 
-    void loop()
-    {
-      String data;
-      int8_t result = at->waitResponse(1000, data);
-      if (!result & data.length())
-      {
-        if (data.indexOf("+QMTRECV") != -1)
-        {
-          // MQTT subscribed
-          /*
-           +QMTRECV: 0, 1,
-           "$aws/things/methane_9FD97F0D/shadow/get/accepted",
-           "{"state":{"desired":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":10},"reported":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":100},"delta":{"sleep_interval":10}},"metadata":{"desired":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}},"reported":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}}},"version":9,"timestamp":1626503353}"
-          */
-          int8_t topic_start = 0;
-          int8_t topic_end = 0;
-
-          // extract subscribed topic
-          topic_start = data.indexOf("\"");
-          topic_end = data.indexOf(",", topic_start);
-
-          String topic = data.substring(topic_start + 1, topic_end - 1);
-          int8_t payload_start = data.indexOf("\"", topic_end + 1);
-          String payload = data.substring(payload_start + 1, data.length() - 1);
-
-          this->callback((char *)topic.c_str(), (char *)payload.c_str(), payload.length());
-        }
-      }
-    }
-
     bool mqtt_tls_connect(uint8_t tcp_conn_id, const char *client_id, const char *host, uint16_t port)
     {
       // # start MQTT SSL connection
@@ -244,11 +214,11 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
       String data;
       // Serial.println("Now waiting for pub response...");
-      int8_t result = at->waitResponse(5000, data, "}\"");
+      at->waitResponse(5000, data, "}\"");
       //Serial.println("#0#");
       // Serial.println(result);
       // Serial.println(data.length());
-      if (data.length()) //!result & 
+      if (data.length()) 
       {
         // Serial.println("#1#");
         if (data.indexOf("+QMTRECV") != -1)
