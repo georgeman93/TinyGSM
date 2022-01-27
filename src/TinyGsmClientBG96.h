@@ -158,21 +158,15 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
     bool mqtt_tls_connect(uint8_t tcp_conn_id, const char *client_id, const char *host, uint16_t port)
     {
-      // # start MQTT SSL connection
-      // AT+QMTOPEN=0, "{account.name}-ats.iot.us-east-1.amazonaws.com",8883
-      // OK
-      // +QMTOPEN: 0,0
+
       at->sendAT(GF("+QMTOPEN="), tcp_conn_id, GF(", \""), host,
                  GF("\","), port);
-      if (at->waitResponse(5000, GF(GSM_NL "+QMTOPEN:")) != 1)
+ 
+      if (at->waitResponse(30000, GF(GSM_NL "+QMTOPEN: ")) != 1)
         return false;
       at->stream.readStringUntil('\n');
       at->waitResponse();
 
-      // # connect to MQTT server
-      // AT+QMTCONN=0,"datadog"
-      // OK
-      // +QMTCONN: 0,0,0
       at->sendAT(GF("+QMTCONN="), tcp_conn_id, GF(",\""), client_id,
                  GF("\""));
       if (at->waitResponse(10000, GF(GSM_NL "+QMTCONN:")) != 1)
@@ -289,13 +283,13 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       return true;
     }
 
-    int8_t setMqttCerts(uint8_t context, const char *rootCA, const char *cert, const char *key)
+    int8_t setMqttCerts(uint8_t context_id, const char *rootCA, const char *cert, const char *key)
     {
       // # configure CA certificate
       // AT+QSSLCFG="cacert",2,"root.pem"
       // OK
       at->sendAT(GF("+QSSLCFG="), GF("\""), GF("cacert"),
-                 GF("\","), 2, GF(",\""), rootCA,
+                 GF("\","), context_id, GF(",\""), rootCA,
                  GF("\""));
       if (!at->waitResponse())
         return false;
@@ -303,7 +297,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       // # configure CC certificate
       // AT+QSSLCFG="clientcert",2,"cert.pem"
       at->sendAT(GF("+QSSLCFG="), GF("\""), GF("clientcert"),
-                 GF("\","), 2, GF(",\""), cert,
+                 GF("\","), context_id, GF(",\""), cert,
                  GF("\""));
       if (!at->waitResponse())
         return false;
@@ -312,7 +306,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
       // AT+QSSLCFG="clientkey",2,"key.pem"
       // OK
       at->sendAT(GF("+QSSLCFG="), GF("\""), GF("clientkey"),
-                 GF("\","), 2, GF(",\""), key,
+                 GF("\","), context_id, GF(",\""), key,
                  GF("\""));
       if (!at->waitResponse())
         return false;
@@ -322,8 +316,11 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
     bool enableSslMqtt(uint8_t context_id)
     {
+
+
       at->sendAT(GF("+QMTCFG="), GF("\""), GF("SSL"),
-                 GF("\","), GF("0,1,2"));
+                 GF("\","), GF("0,1,"), context_id);
+
       if (!at->waitResponse())
         return false;
 
@@ -341,35 +338,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                  GF("\","), context_id, GF(",2"));
       if (!at->waitResponse())
         return false;
-      // # SSL authentication mode: server authentication
-      // # TODO: The following command errored first several times we issued
-      // AT+QSSLCFG="seclevel”,2,2
-      // OK
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("seclevel"),
-                 GF("\","), GF("2,2"));
-      if (!at->waitResponse())
-        return false;
 
-      // # SSL authentication version
-      // AT+QSSLCFG="sslversion",2,4
-      // OK
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("sslversion"),
-                 GF("\","), GF("2,4"));
-      if (!at->waitResponse())
-        return false;
-
-      // # cipher suite
-      // TODO: documentation shows quotes around 0xffff
-      // AT+QSSLCFG="ciphersuite",2,0xffff
-      // OK
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("ciphersuite"),
-                 GF("\","), GF("2,0xffff"));
-      if (!at->waitResponse())
-        return false;
-
-      // # ignore time of authentication
-      // AT+QSSLCFG="ignorelocaltime",1
-      // OK
       at->sendAT(GF("+QSSLCFG="), GF("\""), GF("ignorelocaltime"),
                  GF("\","), GF("1"));
       if (!at->waitResponse())
@@ -575,7 +544,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
     // Configure the TCPIP Context
     sendAT(GF("+QICSGP=1,1,\""), apn, GF("\",\""), user, GF("\",\""), pwd,
-           GF("\""));
+           GF("\""), GF(",1"));
     if (waitResponse() != 1) { return false; }
 
     // Activate GPRS/CSD Context
@@ -661,10 +630,9 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
   bool getGPSImpl(float* lat, float* lon, float* speed = 0, float* alt = 0,
                   int* vsat = 0, int* usat = 0, float* accuracy = 0,
                   int* year = 0, int* month = 0, int* day = 0, int* hour = 0,
-                  int* minute = 0, int* second = 0) {
-    sendAT(GF("+QGPSLOC=2"));
-    if (waitResponse(10000L, GF(GSM_NL "+QGPSLOC: ")) != 1) {
-      // NOTE:  Will return an error if the position isn't fixed
+                  int* minute = 0, int* second = 0, bool* fix = 0, float* heading = 0) {
+    sendAT(GF("+QGPSGNMEA=\"GGA\"")); 
+    if (waitResponse(10000L, GF(GSM_NL "+QGPSGNMEA: ")) != 1) {
       return false;
     }
 
@@ -675,34 +643,67 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     float ialt         = 0;
     int   iusat        = 0;
     float iaccuracy    = 0;
-    int   iyear        = 0;
-    int   imonth       = 0;
-    int   iday         = 0;
-    int   ihour        = 0;
-    int   imin         = 0;
-    float secondWithSS = 0;
+    int   iyear        = -1;
+    int   imonth       = -1;
+    int   iday         = -1;
+    int   ihour        = -1;
+    int   imin         = -1;
+    float secondWithSS = -1;
+    int   ifixquality  = 0;
+    float iheading     = 0;
 
-    // UTC date & Time
-    ihour        = streamGetIntLength(2);      // Two digit hour
-    imin         = streamGetIntLength(2);      // Two digit minute
-    secondWithSS = streamGetFloatBefore(',');  // 6 digit second with subseconds
+    //$GPGGA,115739.00,4158.8441367,N,09147.4416929,W,4,13,0.9,255.747,M,-32.00,M,01,0000*6E 
 
-    ilat      = streamGetFloatBefore(',');  // Latitude
+    streamSkipUntil(',');
+    // we can only break up the time if it appears in the first place 
+    String t  = stream.readStringUntil(','); // eg 103647.0
+    if (t != "") {
+      ihour = atoi(t.substring(0,2).c_str());
+      imin = atoi(t.substring(2,4).c_str());
+      secondWithSS  = atof(t.substring(4,9).c_str());
+    }
+
+    ilat        = streamGetFloatBefore(',');  // Latitude
+    int temp = (int)(ilat/100.0); // convert from degrees and decimal minutes to decimal degrees
+    ilat = temp + (ilat - (float)temp*100)/60;
+    String dir  = stream.readStringUntil(','); // N or S
+    if (dir == "S")
+      ilat = ilat*(-1);
     ilon      = streamGetFloatBefore(',');  // Longitude
+    temp = (int)(ilon/100.0);
+    ilon = temp + (ilon - (float)temp*100)/60;
+    dir       = stream.readStringUntil(','); // E or W
+    if (dir == "W")
+      ilon = ilon*(-1);
+    ifixquality = streamGetIntBefore(',');  // Fix Quality
+    iusat = streamGetIntBefore(',');  // Number of satellites, 
     iaccuracy = streamGetFloatBefore(',');  // Horizontal precision
-    ialt      = streamGetFloatBefore(',');  // Altitude from sea level
-    streamSkipUntil(',');                   // GNSS positioning mode
-    streamSkipUntil(',');  // Course Over Ground based on true north
-    streamSkipUntil(',');  // Speed Over Ground in Km/h
+    ialt      = streamGetFloatBefore(',');  // Altitude from sea level 
+    streamSkipUntil('\n'); // skip height of geoid above ellipse, time since last dgps update, dgps reference station id and checksum
+
+    sendAT(GF("+QGPSGNMEA=\"RMC\"")); 
+    if (waitResponse(10000L, GF(GSM_NL "+QGPSGNMEA: ")) != 1) {
+      return false;
+    }
+    //$GPRMC,220516,A,5133.82,N,00042.24,W,173.8,231.8,130694,004.2,W*70
+    streamSkipUntil(','); 
+    streamSkipUntil(','); // skip time 
+    streamSkipUntil(','); // skip receiver warning 
+    streamSkipUntil(','); // skip lat
+    streamSkipUntil(','); // skip lat dir
+    streamSkipUntil(','); // skip lon
+    streamSkipUntil(','); // skip lon dir
     ispeed = streamGetFloatBefore(',');  // Speed Over Ground in knots
+    iheading = streamGetFloatBefore(','); // Course made good, true
 
-    iday   = streamGetIntLength(2);    // Two digit day
-    imonth = streamGetIntLength(2);    // Two digit month
-    iyear  = streamGetIntBefore(',');  // Two digit year
-
-    iusat = streamGetIntBefore('\n');  // Number of satellites,
-    streamSkipUntil('\n');  // The error code of the operation. If it is not
-                            // 0, it is the type of error.
+    // we can only break up the date if it appears in the first place 
+    String d  = stream.readStringUntil(','); // eg 130922
+    if (d != "") {
+      iday = atoi(d.substring(0,2).c_str());
+      imonth = atoi(d.substring(2,4).c_str());
+      iyear  = atof(d.substring(4,6).c_str()) + 2000; // 22 + 2000 = 2022
+    }
+    streamSkipUntil('\n');  // skip magnetic variation, associated dir and checksum
 
     // Set pointers
     if (lat != NULL) *lat = ilat;
@@ -712,17 +713,25 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     if (vsat != NULL) *vsat = 0;
     if (usat != NULL) *usat = iusat;
     if (accuracy != NULL) *accuracy = iaccuracy;
-    if (iyear < 2000) iyear += 2000;
     if (year != NULL) *year = iyear;
     if (month != NULL) *month = imonth;
     if (day != NULL) *day = iday;
     if (hour != NULL) *hour = ihour;
     if (minute != NULL) *minute = imin;
     if (second != NULL) *second = static_cast<int>(secondWithSS);
+    if (heading != NULL) *heading = iheading;
+    if (fix != NULL && (ifixquality == 1 || ifixquality == 2)) 
+      *fix = true;
+    else 
+      *fix = false;
 
     waitResponse();  // Final OK
     return true;
   }
+
+
+
+
 
   /*
    * Time functions
