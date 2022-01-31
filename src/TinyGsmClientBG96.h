@@ -77,276 +77,238 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     friend class TinyGsmBG96;
 
   public:
-    int8_t uploadFile(const char *fileName, const char *content)
-    {
-      // AT+QFDEL="file_name.pem"
-      at->sendAT(GF("+QFDEL="), GF("\""), fileName,
-                 GF("\""));
+    bool uploadFile(const char *fileName, const char *content) {
+      at->sendAT("+QFDEL=", "\"", fileName, "\"");
       at->waitResponse();
-
-      at->sendAT(GF("+QFUPL="), GF("\""), fileName,
-                 GF("\","), strlen(content), GF(","), 100);
-      if (at->waitResponse(GF("CONNECT")) != 1)
-        return 0;
+      at->sendAT("+QFUPL=", "\"", fileName, "\",", strlen(content), ",", 100);
+      if (at->waitResponse("CONNECT") != 1)
+        return false;
       at->stream.write(content, strlen(content));
       at->stream.flush();
-      if (at->waitResponse() != 1)
-        return 0;
-      if (at->waitResponse(5000, GF(GSM_NL "+QFUPL:")) != 1)
-        return 0;
-      at->stream.readStringUntil('\n');
-      return at->waitResponse();
+      if (!at->waitResponse(2000))
+        return false;
+
+      return true;
     }
 
-    bool sslSend(uint8_t context, const char *host, const char *payload)
-    {
-      at->sendAT(GF("+QSSLCLOSE="), context);
-      at->waitResponse(5000, GFP(GSM_OK));
-      delay(1000);
-      at->sendAT(GF("+QSSLCLOSE="), context);
-      at->waitResponse(5000, GFP(GSM_OK));
-      delay(1000);
+    bool enableMqtts() {
+      
+      const int ssl_context_id = 1;
+      const int tcp_conn_id = 0;
 
-      // SSLOPEN
-      at->sendAT(GF("+QSSLOPEN="), context, GF(",1,1,"), GF("\""), host,
-                 GF("\",443,2"));
-      if (at->waitResponse(15000, GF("CONNECT")) != 1)
+      while (at->stream.available())
+        at->stream.read();
+
+      at->sendAT("+QMTCFG=", "\"", "SSL", "\",", tcp_conn_id, ",1,", ssl_context_id);
+      if (!at->waitResponse())
         return false;
-      at->stream.write(payload, strlen(payload));
-      at->stream.flush();
-
-      if (at->waitResponse(15000, GFP(GSM_OK)) != 1){
-        uint32_t receiving_time = millis();
-        while (millis() - receiving_time < 5000)
-          at->stream.readStringUntil('\n');
-
-        // SSLCLOSE
-        at->sendAT(GF("+QSSLCLOSE="), context);
-        at->waitResponse(5000, GFP(GSM_OK));
+      at->sendAT("+QSSLCFG=", "\"sslversion", "\",", ssl_context_id, ",4");
+      if (!at->waitResponse())
         return false;
-      }
+      at->sendAT("+QSSLCFG=", "\"ciphersuite",  "\",", ssl_context_id, ",0xffff");
+      if (!at->waitResponse())
+        return false;
+      at->sendAT("+QSSLCFG=", "\"seclevel", "\",", ssl_context_id, ",2");
+      if (!at->waitResponse())
+        return false;
+      at->sendAT("+QSSLCFG=", "\"", "ignorelocaltime", "\",", ssl_context_id);
+      if (!at->waitResponse())
+        return false;
 
-        
+      return true;
+    }
 
-      // Waiting
-      uint32_t receiving_time = millis();
-      while (millis() - receiving_time < 5000)
-        at->stream.readStringUntil('\n');
-
-      // SSLCLOSE
-      at->sendAT(GF("+QSSLCLOSE="), context);
-      at->waitResponse(5000, GFP(GSM_OK));
-      // if (at->waitResponse(5000, GFP(GSM_OK)) != 1)
-      //   return false; 
+    bool setCertsMqtts(const char *rootCA, const char *cert, const char *key) {
+      const int ssl_context_id = 1;
+      
+      at->sendAT("+QSSLCFG=", "\"", "cacert", "\",", ssl_context_id, ",\"", rootCA, "\"");
+      if (!at->waitResponse())
+        return false;
+      at->sendAT("+QSSLCFG=", "\"", "clientcert", "\",", ssl_context_id, ",\"", cert, "\"");
+      if (!at->waitResponse())
+        return false;
+      at->sendAT("+QSSLCFG=", "\"", "clientkey", "\",", ssl_context_id, ",\"", key, "\"");
+      if (!at->waitResponse())
+        return false;
       
       return true;
     }
 
-    int8_t setHttpsRootCa(uint8_t context, const char *fileName)
-    {
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("cacert"),
-                 GF("\","), context, GF(",\""), fileName, GF("\""));
+    bool connectMqtts(const char *client_id, const char *host, uint16_t port) {
+      const int tcp_conn_id = 0;
+      char reply[100];
+
+      at->sendAT("+QMTOPEN=", tcp_conn_id, ",\"", host, "\",", port);
       at->waitResponse();
-
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("negotiatetime"),
-                 GF("\","), context, GF(",300"));
-      at->waitResponse();
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("ignorelocaltime"),
-                 GF("\","), context, GF(",0"));
-      return at->waitResponse();
-    }
-
-    bool mqtt_tls_connect(uint8_t tcp_conn_id, const char *client_id, const char *host, uint16_t port)
-    {
-
-      at->sendAT(GF("+QMTOPEN="), tcp_conn_id, GF(", \""), host,
-                 GF("\","), port);
- 
-      if (at->waitResponse(30000, GF(GSM_NL "+QMTOPEN: ")) != 1)
+      sprintf(reply, "+QMTOPEN: %d,0" GSM_NL, tcp_conn_id);
+      if (at->waitResponse(30000, reply) != 1)
         return false;
-      at->stream.readStringUntil('\n');
-      at->waitResponse();
-
-      at->sendAT(GF("+QMTCONN="), tcp_conn_id, GF(",\""), client_id,
-                 GF("\""));
-      if (at->waitResponse(10000, GF(GSM_NL "+QMTCONN:")) != 1)
+      at->sendAT("+QMTCONN=", tcp_conn_id, ",\"", client_id, "\"");
+      
+      sprintf(reply, "+QMTCONN: %d,0,0" GSM_NL, tcp_conn_id);
+      if (at->waitResponse(30000, reply) != 1)
         return false;
 
-      at->stream.readStringUntil('\n');
-      at->waitResponse();
       return true;
     }
 
-    bool mqtt_tls_disconnect(uint8_t tcp_conn_id)
-    {
-      // # disconnect a client from MQTT server
-      // AT+QMTDISC=0
-      // OK +QMTDISC: 0,0
-      at->sendAT(GF("+QMTDISC="), tcp_conn_id);
+    bool disconnectMqtts() {
+      int tcp_conn_id = 0;
+
+      at->sendAT("+QMTDISC=", tcp_conn_id);
       if (!at->waitResponse())
         return false;
       at->stream.readStringUntil('\n');
       at->waitResponse();
+
       return true;
     }
 
-    int8_t mqtt_tls_publish(uint8_t tcp_conn_id, const char *topic, const char *payload)
-    {
-      // # publish messages
-      // AT+QMTPUB=0,1,1,0,"$aws/things/datadog/shadow/update/accepted"
-      // >This is publish data from client OK
-      // +QMTPUB: 0,1,0
+    bool subscribeMqtts(const char *topic) {
+      const int tcp_conn_id = 0;
+      const int msg_id = 1;
+      const int qos = 1;
+      char reply[100];
 
-      at->sendAT(GF("+QMTPUB="), tcp_conn_id, GF(",0,0,0"), GF(",\""), topic,
-                 GF("\","), strlen(payload));
-      if (at->waitResponse(GF(">")) != 1)
-        return 0;
+      at->sendAT("+QMTSUB=", tcp_conn_id, ",", msg_id, ",\"", topic, "\",", qos);
+      
+      sprintf(reply, "+QMTSUB: %d,%d,0,%d" GSM_NL, tcp_conn_id, msg_id, qos);
+      if (at->waitResponse(10000, reply) != 1)
+        return false;
+
+      return true;
+    }
+
+    bool publishMqtts(const char *topic, const char *payload, bool expectreply = false) {
+      const int tcp_conn_id = 0;
+      const int msg_id = 1;
+      const int qos = 1;
+      char reply[100];
+
+      at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id, ",", qos, ",0,\"", topic, "\",", strlen(payload));
+      if (at->waitResponse(">") != 1)
+        return false;
       at->stream.write(payload, strlen(payload));
       at->stream.flush();
-      if (at->waitResponse(5000, GF(GSM_NL "+QMTPUB: 0,0,0\r\n")) != 1)
-        return 0;
+      sprintf(reply, "+QMTPUB: %d,%d,0" GSM_NL, tcp_conn_id, msg_id);
+      if (at->waitResponse(5000, reply) != 1)
+        return false;
+      at->streamSkipUntil('\n'); // in case there is an extra value for the number of retransmissions 
 
-      String data;
-      // Serial.println("Now waiting for pub response...");
-      at->waitResponse(5000, data, "}\"");
-      //Serial.println("#0#");
-      // Serial.println(result);
-      // Serial.println(data.length());
-      if (data.length()) 
-      {
-        // Serial.println("#1#");
-        if (data.indexOf("+QMTRECV") != -1)
-        {
-          // Serial.println("#2#");
-          // MQTT subscribed
-          /*
-           +QMTRECV: 0, 1,
-           "$aws/things/methane_9FD97F0D/shadow/get/accepted",
-           "{"state":{"desired":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":10},"reported":{"wifi_ssid":"Surfbee_GS","wifi_pass":"schubach2640","sleep_interval":100},"delta":{"sleep_interval":10}},"metadata":{"desired":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}},"reported":{"wifi_ssid":{"timestamp":1626490563},"wifi_pass":{"timestamp":1626490563},"sleep_interval":{"timestamp":1626490563}}},"version":9,"timestamp":1626503353}"
-          */
-          int8_t topic_start = 0;
-          int8_t topic_end = 0;
+      if (expectreply) {
+        at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id + 1, ",", qos, ",0,\"", "dummy", "\",", 1);
+        if (at->waitResponse(">") != 1)
+          return 0;
+        char dummy[1] = {'0'};
+        at->stream.write(dummy,1);
+        at->stream.flush();
 
-          // extract subscribed topic
-          topic_start = data.indexOf("\"");
-          topic_end = data.indexOf(",", topic_start);
-          //Serial.println("#3#");
+        String data;
+        at->waitResponse(5000, data, "}\"");
 
-          String topic = data.substring(topic_start + 1, topic_end - 1);
-          int8_t payload_start = data.indexOf("\"", topic_end + 1);
-          String payload = data.substring(payload_start + 1, data.length() - 1);
-          // Serial.println("Done handling pub response");
+        Serial.println(data.length());
+        if (data.length()) {
+          if (data.indexOf("+QMTRECV") != -1) {
+            int8_t topic_start = 0;
+            int8_t topic_end = 0;
 
-          this->callback((char *)topic.c_str(), (char *)payload.c_str(), payload.length());
+            // extract subscribed topic
+            topic_start = data.indexOf("\"");
+            topic_end = data.indexOf(",", topic_start);
+
+            String topic = data.substring(topic_start + 1, topic_end - 1);
+            int8_t payload_start = data.indexOf("\"", topic_end + 1);
+            String payload = data.substring(payload_start + 1, data.length() - 1);
+
+            this->callback((char *)topic.c_str(), (char *)payload.c_str(), payload.length());
+          }
         }
       }
       return 1;
     }
 
-    bool mqtt_tls_subscribe(uint8_t tcp_conn_id, const char *topic)
-    {
-      // # subscribe to topics
-      // AT+QMTSUB=0,1,"$aws/things/datadog/shadow/update/accepted",1
-      // OK
-      // +QMTSUB: 0,1,0,1
-      at->sendAT(GF("+QMTSUB="), tcp_conn_id, GF(",1"), GF(",\""), topic,
-                 GF("\","), 1);
-      if (at->waitResponse(5000, GF(GSM_NL "+QMTSUB:")) != 1)
-        return false;
-      at->stream.readStringUntil('\n');
-      at->waitResponse();
-      return true;
-    }
-
-    void setCallback(MQTT_CALLBACK_SIGNATURE)
+    void setCallbackMqtts(MQTT_CALLBACK_SIGNATURE)
     {
       this->callback = callback;
     }
 
-    bool enableSslHttps(uint8_t context_id)
-    {
-      at->sendAT(GF("+QSSLCFG="), GF("\"sslversion"),
-                 GF("\","), context_id, GF(",4"));
+    bool enableHttps() {
+      const int ssl_context_id = 2;
+
+      at->sendAT("+QSSLCFG=", "\"sslversion", "\",", ssl_context_id, ",4");
       if (!at->waitResponse())
         return false;
 
-      at->sendAT(GF("+QSSLCFG="), GF("\"ciphersuite"),
-                 GF("\","), context_id, GF(",0xffff"));
+      at->sendAT("+QSSLCFG=", "\"ciphersuite", "\",", ssl_context_id, ",0xffff");
       if (!at->waitResponse())
         return false;
 
-      at->sendAT(GF("+QSSLCFG="), GF("\"seclevel"),
-                 GF("\","), context_id, GF(",1"));
+      at->sendAT("+QSSLCFG=", "\"seclevel", "\",", ssl_context_id, ",1");
       if (!at->waitResponse())
         return false;
 
       return true;
     }
 
-    int8_t setMqttCerts(uint8_t context_id, const char *rootCA, const char *cert, const char *key)
-    {
-      // # configure CA certificate
-      // AT+QSSLCFG="cacert",2,"root.pem"
-      // OK
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("cacert"),
-                 GF("\","), context_id, GF(",\""), rootCA,
-                 GF("\""));
-      if (!at->waitResponse())
-        return false;
+    bool setCertsHttps(const char *fileName) {
+      const int ssl_context_id = 2;
 
-      // # configure CC certificate
-      // AT+QSSLCFG="clientcert",2,"cert.pem"
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("clientcert"),
-                 GF("\","), context_id, GF(",\""), cert,
-                 GF("\""));
-      if (!at->waitResponse())
-        return false;
+      at->sendAT("+QSSLCFG=", "\"", "cacert", "\",", ssl_context_id, ",\"", fileName, "\"");
+      at->waitResponse();
+      at->sendAT("+QSSLCFG=", "\"", "negotiatetime", "\",", ssl_context_id, ",300");
+      at->waitResponse();
+      at->sendAT("+QSSLCFG=", "\"", "ignorelocaltime", "\",", ssl_context_id, ",0");
+      return at->waitResponse();
+    }
+  
+    bool connectHttps(const char *host) {
+      const int pdp_context_id = 1;
+      const int ssl_context_id = 2;
+      const int client_id = 0;
+      char reply[100];
 
-      // # configure CK certificate
-      // AT+QSSLCFG="clientkey",2,"key.pem"
-      // OK
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("clientkey"),
-                 GF("\","), context_id, GF(",\""), key,
-                 GF("\""));
-      if (!at->waitResponse())
+      at->sendAT("+QSSLOPEN=", pdp_context_id ,"," ,ssl_context_id ,"," ,client_id ,",\"" ,host ,"\"," ,"443,1");
+
+      sprintf(reply, "+QSSLOPEN: %d,0" GSM_NL, client_id);
+      if (at->waitResponse(40000, reply) != 1) {
         return false;
+      }
+      return true;
+    }
+
+    bool sendHttps(const char *payload) {
+      const int client_id = 0;
+      const int max_send_size = 1024; 
+      const int initial_size = strlen(payload);
+      int bytes_sent = 0;
+      int bytes_sending;
+
+      while (bytes_sent < initial_size) {
+        delay(1000);
+        if (strlen(payload) > max_send_size)
+          bytes_sending = max_send_size;
+        else 
+          bytes_sending = strlen(payload);
+
+        at->sendAT("+QSSLSEND=", client_id, ",", bytes_sending);
+        if (at->waitResponse(5000, ">") != 1)
+          return false;
+        at->stream.write(payload, bytes_sending);
+        at->stream.flush();
+
+        if (at->waitResponse(5000, "SEND OK" GSM_NL) != 1)
+          return false;
+        
+        payload += bytes_sending;
+        bytes_sent += bytes_sending;
+      }
       
-      return true;
-    }
-
-    bool enableSslMqtt(uint8_t context_id)
-    {
-
-
-      at->sendAT(GF("+QMTCFG="), GF("\""), GF("SSL"),
-                 GF("\","), GF("0,1,"), context_id);
-
-      if (!at->waitResponse())
-        return false;
-
-      at->sendAT(GF("+QSSLCFG="), GF("\"sslversion"),
-                 GF("\","), context_id, GF(",4"));
-      if (!at->waitResponse())
-        return false;
-
-      at->sendAT(GF("+QSSLCFG="), GF("\"ciphersuite"),
-                 GF("\","), context_id, GF(",0xffff"));
-      if (!at->waitResponse())
-        return false;
-
-      at->sendAT(GF("+QSSLCFG="), GF("\"seclevel"),
-                 GF("\","), context_id, GF(",2"));
-      if (!at->waitResponse())
-        return false;
-
-      at->sendAT(GF("+QSSLCFG="), GF("\""), GF("ignorelocaltime"),
-                 GF("\","), GF("1"));
-      if (!at->waitResponse())
+      if (!at->waitResponse(10000, "\"}" GSM_NL))
         return false;
 
       return true;
     }
-
+  
   private:
     MQTT_CALLBACK_SIGNATURE;
 
@@ -619,7 +581,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
   // get the RAW GPS output
   String getGPSrawImpl() {
     sendAT(GF("+QGPSLOC=2"));
-    if (waitResponse(10000L, GF(GSM_NL "+QGPSLOC:")) != 1) { return ""; }
+    if (waitResponse(10000L, GF("+QGPSLOC:")) != 1) { return ""; }
     String res = stream.readStringUntil('\n');
     waitResponse();
     res.trim();
@@ -632,7 +594,8 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                   int* year = 0, int* month = 0, int* day = 0, int* hour = 0,
                   int* minute = 0, int* second = 0, bool* fix = 0, float* heading = 0) {
     sendAT(GF("+QGPSGNMEA=\"GGA\"")); 
-    if (waitResponse(10000L, GF(GSM_NL "+QGPSGNMEA: ")) != 1) {
+    if (waitResponse(10000L, GF("+QGPSGNMEA: $GPGGA,")) != 1) {
+      waitResponse();
       return false;
     }
 
@@ -654,7 +617,6 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
     //$GPGGA,115739.00,4158.8441367,N,09147.4416929,W,4,13,0.9,255.747,M,-32.00,M,01,0000*6E 
 
-    streamSkipUntil(',');
     // we can only break up the time if it appears in the first place 
     String t  = stream.readStringUntil(','); // eg 103647.0
     if (t != "") {
@@ -681,12 +643,12 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     ialt      = streamGetFloatBefore(',');  // Altitude from sea level 
     streamSkipUntil('\n'); // skip height of geoid above ellipse, time since last dgps update, dgps reference station id and checksum
 
-    sendAT(GF("+QGPSGNMEA=\"RMC\"")); 
-    if (waitResponse(10000L, GF(GSM_NL "+QGPSGNMEA: ")) != 1) {
+    sendAT("+QGPSGNMEA=\"RMC\""); 
+    if (waitResponse(10000L, "+QGPSGNMEA: $GPRMC,") != 1) {
+      waitResponse();
       return false;
     }
     //$GPRMC,220516,A,5133.82,N,00042.24,W,173.8,231.8,130694,004.2,W*70
-    streamSkipUntil(','); 
     streamSkipUntil(','); // skip time 
     streamSkipUntil(','); // skip receiver warning 
     streamSkipUntil(','); // skip lat
