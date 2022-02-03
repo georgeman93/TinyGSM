@@ -145,7 +145,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             at->sendAT("+QMTCONN=", tcp_conn_id, ",\"", client_id, "\"");
 
             sprintf(reply, "+QMTCONN: %d,0,0" GSM_NL, tcp_conn_id);
-            if (at->waitResponse(30000, reply) != 1)
+            if (at->waitResponse(50000, reply) != 1)
                 return false;
 
             return true;
@@ -183,6 +183,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             const int msg_id = 1;
             const int qos = 1;
             char reply[100];
+            String data;
 
             at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id, ",", qos, ",0,\"", topic, "\",", strlen(payload));
             if (at->waitResponse(">") != 1)
@@ -194,18 +195,18 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                 return false;
             at->streamSkipUntil('\n');  // in case there is an extra value for the number of retransmissions
 
+            at->waitResponse(1000, data, "}\"");  // in case the reply comes quickly
             if (expectreply) {
-                at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id + 1, ",", qos, ",0,\"", "dummy", "\",", 1);
-                if (at->waitResponse(">") != 1)
-                    return 0;
-                char dummy[1] = {'0'};
-                at->stream.write(dummy, 1);
-                at->stream.flush();
+                if (!data.length()) {
+                    at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id + 1, ",", qos, ",0,\"", "dummy", "\",", 1);
+                    if (at->waitResponse(">") != 1)
+                        return 0;
+                    char dummy[1] = {'0'};
+                    at->stream.write(dummy, 1);
+                    at->stream.flush();
+                    at->waitResponse(5000, data, "}\"");
+                }
 
-                String data;
-                at->waitResponse(5000, data, "}\"");
-
-                Serial.println(data.length());
                 if (data.length()) {
                     if (data.indexOf("+QMTRECV") != -1) {
                         int8_t topic_start = 0;
