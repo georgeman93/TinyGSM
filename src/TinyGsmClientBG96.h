@@ -190,7 +190,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                 return false;
             at->stream.write(payload, strlen(payload));
             at->stream.flush();
-            sprintf(reply, "+QMTPUB: %d,%d,0" GSM_NL, tcp_conn_id, msg_id);
+            sprintf(reply, "+QMTPUB: %d,%d,", tcp_conn_id, msg_id);
             if (at->waitResponse(5000, reply) != 1)
                 return false;
             at->streamSkipUntil('\n');  // in case there is an extra value for the number of retransmissions
