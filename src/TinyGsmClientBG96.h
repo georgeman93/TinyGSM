@@ -204,7 +204,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                     char dummy[1] = {'0'};
                     at->stream.write(dummy, 1);
                     at->stream.flush();
-                    at->waitResponse(5000, data, "}\"");
+                    at->waitResponse(10000, data, "}\"");
                 }
 
                 if (data.length()) {
