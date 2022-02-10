@@ -6,6 +6,8 @@
  * @date       Nov 2016
  */
 
+#include "../../testing.h"
+
 #ifndef SRC_TINYGSMTIME_H_
 #define SRC_TINYGSMTIME_H_
 
@@ -65,41 +67,48 @@ class TinyGsmTime {
 
   bool getNetworkTimeImpl(int* year, int* month, int* day, int* hour,
                           int* minute, int* second, float* timezone) {
-    thisModem().sendAT(GF("+CCLK?"));
-    if (thisModem().waitResponse(2000L, GF("+CCLK: \"")) != 1) { return false; }
+#ifdef TESTING
+      if (executeTest(9)) return t[9];
+#endif
+      thisModem().sendAT(GF("+CCLK?"));
+      if (thisModem().waitResponse(2000L, GF("+CCLK: \"")) != 1) {
+          return false;
+      }
 
-    int iyear     = 0;
-    int imonth    = 0;
-    int iday      = 0;
-    int ihour     = 0;
-    int imin      = 0;
-    int isec      = 0;
-    int itimezone = 0;
+      int iyear = 0;
+      int imonth = 0;
+      int iday = 0;
+      int ihour = 0;
+      int imin = 0;
+      int isec = 0;
+      int itimezone = 0;
 
-    // Date & Time
-    iyear       = thisModem().streamGetIntBefore('/');
-    imonth      = thisModem().streamGetIntBefore('/');
-    iday        = thisModem().streamGetIntBefore(',');
-    ihour       = thisModem().streamGetIntBefore(':');
-    imin        = thisModem().streamGetIntBefore(':');
-    isec        = thisModem().streamGetIntLength(2);
-    char tzSign = thisModem().stream.read();
-    itimezone   = thisModem().streamGetIntBefore('\n');
-    if (tzSign == '-') { itimezone = itimezone * -1; }
+      // Date & Time
+      iyear = thisModem().streamGetIntBefore('/');
+      imonth = thisModem().streamGetIntBefore('/');
+      iday = thisModem().streamGetIntBefore(',');
+      ihour = thisModem().streamGetIntBefore(':');
+      imin = thisModem().streamGetIntBefore(':');
+      isec = thisModem().streamGetIntLength(2);
+      char tzSign = thisModem().stream.read();
+      itimezone = thisModem().streamGetIntBefore('\n');
+      if (tzSign == '-') {
+          itimezone = itimezone * -1;
+      }
 
-    // Set pointers
-    if (iyear < 2000) iyear += 2000;
-    if (year != NULL) *year = iyear;
-    if (month != NULL) *month = imonth;
-    if (day != NULL) *day = iday;
-    if (hour != NULL) *hour = ihour;
-    if (minute != NULL) *minute = imin;
-    if (second != NULL) *second = isec;
-    if (timezone != NULL) *timezone = static_cast<float>(itimezone) / 4.0;
+      // Set pointers
+      if (iyear < 2000) iyear += 2000;
+      if (year != NULL) *year = iyear;
+      if (month != NULL) *month = imonth;
+      if (day != NULL) *day = iday;
+      if (hour != NULL) *hour = ihour;
+      if (minute != NULL) *minute = imin;
+      if (second != NULL) *second = isec;
+      if (timezone != NULL) *timezone = static_cast<float>(itimezone) / 4.0;
 
-    // Final OK
-    thisModem().waitResponse();
-    return true;
+      // Final OK
+      thisModem().waitResponse();
+      return true;
   }
 };
 

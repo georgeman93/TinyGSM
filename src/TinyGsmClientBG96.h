@@ -6,6 +6,8 @@
  * @date       Apr 2018
  */
 
+#include "../../testing.h"
+
 #ifndef SRC_TINYGSMCLIENTBG96_H_
 #define SRC_TINYGSMCLIENTBG96_H_
 
@@ -204,7 +206,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                     char dummy[1] = {'0'};
                     at->stream.write(dummy, 1);
                     at->stream.flush();
-                    at->waitResponse(10000, data, "}\"");
+                    at->waitResponse(20000, data, "}\"");
                 }
 
                 if (data.length()) {
@@ -588,6 +590,11 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
    protected:
     // enable GPS
     bool enableGPSImpl() {
+#ifdef TESTING
+        if (executeTest(8)) {
+            if (t[8]) return false;
+        }
+#endif
         sendAT(GF("+QGPS=1"));
         if (waitResponse() != 1) {
             return false;
@@ -620,6 +627,9 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                     int* vsat = 0, int* usat = 0, float* accuracy = 0,
                     int* year = 0, int* month = 0, int* day = 0, int* hour = 0,
                     int* minute = 0, int* second = 0, bool* fix = 0, float* heading = 0) {
+#ifdef TESTING
+        if (executeTest(10)) return t[10];
+#endif
         sendAT(GF("+QGPSGNMEA=\"GGA\""));
         if (waitResponse(10000L, GF("+QGPSGNMEA: $GPGGA,")) != 1) {
             waitResponse();
