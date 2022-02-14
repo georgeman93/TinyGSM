@@ -155,13 +155,12 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
         bool disconnectMqtts() {
             int tcp_conn_id = 0;
-
+            char reply[100];
+            at->streamClear();
             at->sendAT("+QMTDISC=", tcp_conn_id);
-            if (!at->waitResponse())
+            sprintf(reply, "+QMTDISC: %d,0" GSM_NL, tcp_conn_id);
+            if (at->waitResponse(50000, reply) != 1)
                 return false;
-            at->stream.readStringUntil('\n');
-            at->waitResponse();
-
             return true;
         }
 
@@ -304,7 +303,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                 bytes_sent += bytes_sending;
             }
 
-            if (!at->waitResponse(10000, "\"}" GSM_NL))
+            if (!at->waitResponse(25000, "\"}" GSM_NL))
                 return false;
 
             return true;
