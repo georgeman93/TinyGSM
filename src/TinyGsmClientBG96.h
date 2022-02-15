@@ -309,6 +309,13 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
+        void test() {
+            at->sendAT("+QPING=1,google.com");
+            delay(3000);
+            at->streamClear();
+            return;
+        }
+
        private:
         MQTT_CALLBACK_SIGNATURE;
 
@@ -898,7 +905,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     size_t modemRead(size_t size, uint8_t mux) {
         if (!sockets[mux]) return 0;
         sendAT(GF("+QIRD="), mux, ',', (uint16_t)size);
-        if (waitResponse(GF("+QIRD:")) != 1) {
+        if (waitResponse(10000, GF("+QIRD:")) != 1) {
             return 0;
         }
         int16_t len = streamGetIntBefore('\n');
@@ -916,7 +923,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         if (!sockets[mux]) return 0;
         sendAT(GF("+QIRD="), mux, GF(",0"));
         size_t result = 0;
-        if (waitResponse(GF("+QIRD:")) == 1) {
+        if (waitResponse(10000, GF("+QIRD:")) == 1) {
             streamSkipUntil(',');  // Skip total received
             streamSkipUntil(',');  // Skip have read
             result = streamGetIntBefore('\n');
@@ -935,7 +942,10 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         sendAT(GF("+QISTATE=1,"), mux);
         // +QISTATE: 0,"TCP","151.139.237.11",80,5087,4,1,0,0,"uart1"
 
-        if (waitResponse(GF("+QISTATE:")) != 1) {
+        if (waitResponse(10000, GF("+QISTATE:")) != 1) {
+            sendAT("I");
+            delay(3000);
+            streamClear();
             return false;
         }
 
@@ -1061,7 +1071,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                         GsmConstStr r3 = NULL, GsmConstStr r4 = NULL,
 #endif
                         GsmConstStr r5 = NULL) {
-        return waitResponse(1000, r1, r2, r3, r4, r5);
+        return waitResponse(3000, r1, r2, r3, r4, r5);
     }
 
    public:
