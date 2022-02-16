@@ -309,13 +309,6 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
-        void test() {
-            at->sendAT("+QPING=1,google.com");
-            delay(3000);
-            at->streamClear();
-            return;
-        }
-
        private:
         MQTT_CALLBACK_SIGNATURE;
 
