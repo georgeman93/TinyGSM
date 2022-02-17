@@ -309,6 +309,95 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
+        bool activateTransparent() {
+            const int client_id = 0;
+            at->sendAT("+QISWTMD=", client_id, ",", 2);
+
+            if (at->waitResponse(40000, "CONNECT" GSM_NL) != 1) {
+                return false;
+            }
+            return true;
+        }
+
+        bool httpGETtoFile(const char* req_header, int& resp_len, const char* url, const char* filename, int timeout) {
+            const int client_id = 0;
+            const int pdp_context_id = 1;
+
+            // configure http parameters
+            at->sendAT("+QHTTPCFG=\"contextid\",", pdp_context_id);
+            if (!at->waitResponse())
+                return false;
+
+            at->sendAT("+QHTTPCFG=\"responseheader\",", 0);
+            if (!at->waitResponse())
+                return false;
+            at->sendAT("+QHTTPCFG=\"requestheader\",", 1);
+            if (!at->waitResponse())
+                return false;
+
+            // set the http url  AT+QHTTPURL
+            at->sendAT("+QHTTPURL=", strlen(url));
+            if (at->waitResponse(4000, "CONNECT" GSM_NL) != 1) {
+                return false;
+            }
+            at->stream.write(url, strlen(url));
+            if (!at->waitResponse())
+                return false;
+
+            // send GET request
+            at->sendAT("+QHTTPGET=", 10000, ",", strlen(req_header));
+            if (at->waitResponse(10000, "CONNECT" GSM_NL) != 1) {
+                return false;
+            }
+            at->stream.write(req_header, strlen(req_header));
+            if (!at->waitResponse(10000))
+                return false;
+
+            // parse response status urc code +QHTTPGET: <err>[,<httprspcode>[,<content_length>]]
+            if (at->waitResponse("+QHTTPGET: 0,200,") != 1) {
+                return false;
+            }
+            // get response length
+            resp_len = at->stream.readStringUntil('\n').toInt();
+            Serial.printf("Response length is %d\n", resp_len);
+            if (resp_len < 10000)
+                return false;
+
+            // at->sendAT("+QHTTPREADFILE=?");
+            // if (!at->waitResponse())
+            //     return false;
+
+            // at->sendAT("+QFLST");
+            // if (!at->waitResponse())
+            //     return false;
+
+            at->sendAT("+QHTTPREADFILE=\"", "ufs:3.txt", "\"");
+            if (!at->waitResponse(1000 * timeout))
+                return false;
+
+            // wait for response to be read to file
+            if (at->waitResponse(timeout * 1000, "+QHTTPREADFILE: 0" GSM_NL) != 1) {
+                return false;
+            }
+
+            // open the file to be read
+            at->sendAT("+QFOPEN=\"", filename, "\"", 2);
+            if (!at->waitResponse("+QFOPEN: "))
+                return false;
+
+            String file_handle = at->stream.readStringUntil('\n');
+
+            at->sendAT("+QFREAD=", file_handle);
+            if (at->waitResponse(4000, "CONNECT" GSM_NL) != 1) {
+                return false;
+            }
+            if (at->waitResponse(GSM_NL) != 1) {
+                return false;
+            }
+
+            return true;
+        }
+
        private:
         MQTT_CALLBACK_SIGNATURE;
 
@@ -760,7 +849,10 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     // local time.
     bool getNetworkTimeImpl(int* year, int* month, int* day, int* hour,
                             int* minute, int* second, float* timezone) {
-        sendAT(GF("+QLTS=2"));
+#ifdef TESTING
+        if (executeTest(9)) return t[9];
+#endif
+        sendAT(GF("+QLTS=1"));
         if (waitResponse(2000L, GF("+QLTS: \"")) != 1) {
             return false;
         }
