@@ -50,6 +50,9 @@ class TinyGsmModem {
   String getModemInfo() {
     return thisModem().getModemInfoImpl();
   }
+  String getModemFirwmareVersion() {
+      return thisModem().getModemFirwmareVersionImpl();
+  }
   // Gets the modem name (as it calls itself)
   String getModemName() {
     return thisModem().getModemNameImpl();
@@ -139,6 +142,21 @@ class TinyGsmModem {
     res.replace("\r", " ");
     res.trim();
     return res;
+  }
+
+  String getModemFirwmareVersionImpl() {
+      String res;
+      thisModem().sendAT(GF("+QGMR"));
+      if (thisModem().waitResponse(1000L, res) != 1) {
+          return "";
+      }
+      // Do the replaces twice so we cover both \r and \r\n type endings
+      res.replace("\r\nOK\r\n", "");
+      res.replace("\rOK\r", "");
+      res.replace("\r\n", " ");
+      res.replace("\r", " ");
+      res.trim();
+      return res;
   }
 
   String getModemNameImpl() {

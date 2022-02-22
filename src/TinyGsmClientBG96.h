@@ -179,7 +179,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
-        bool publishMqtts(const char* topic, const char* payload, bool expectreply = false) {
+        bool publishMqtts(const char* topic, const char* payload) {
             const int tcp_conn_id = 0;
             const int msg_id = 1;
             const int qos = 1;
@@ -196,36 +196,26 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                 return false;
             at->streamSkipUntil('\n');  // in case there is an extra value for the number of retransmissions
 
-            at->waitResponse(1000, data, "}\"");  // in case the reply comes quickly
-            if (expectreply) {
-                if (!data.length()) {
-                    at->sendAT("+QMTPUB=", tcp_conn_id, ",", msg_id + 1, ",", qos, ",0,\"", "dummy", "\",", 1);
-                    if (at->waitResponse(">") != 1)
-                        return 0;
-                    char dummy[1] = {'0'};
-                    at->stream.write(dummy, 1);
-                    at->stream.flush();
-                    at->waitResponse(20000, data, "}\"");
-                }
+            at->waitResponse(5000, data, "}\"");  // in case the reply comes quickly
 
-                if (data.length()) {
-                    if (data.indexOf("+QMTRECV") != -1) {
-                        int8_t topic_start = 0;
-                        int8_t topic_end = 0;
+            if (data.length()) {
+                if (data.indexOf("+QMTRECV") != -1) {
+                    int8_t topic_start = 0;
+                    int8_t topic_end = 0;
 
-                        // extract subscribed topic
-                        topic_start = data.indexOf("\"");
-                        topic_end = data.indexOf(",", topic_start);
+                    // extract subscribed topic
+                    topic_start = data.indexOf("\"");
+                    topic_end = data.indexOf(",", topic_start);
 
-                        String topic = data.substring(topic_start + 1, topic_end - 1);
-                        int8_t payload_start = data.indexOf("\"", topic_end + 1);
-                        String payload = data.substring(payload_start + 1, data.length() - 1);
+                    String topic = data.substring(topic_start + 1, topic_end - 1);
+                    int8_t payload_start = data.indexOf("\"", topic_end + 1);
+                    String payload = data.substring(payload_start + 1, data.length() - 1);
 
-                        this->callback((char*)topic.c_str(), (char*)payload.c_str(), payload.length());
-                    }
+                    this->callback((char*)topic.c_str(), (char*)payload.c_str(), payload.length());
                 }
             }
-            return 1;
+
+            return true;
         }
 
         void setCallbackMqtts(MQTT_CALLBACK_SIGNATURE) {
@@ -319,81 +309,109 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
-        bool httpGETtoFile(const char* req_header, int& resp_len, const char* url, const char* filename, int timeout) {
+        int httpGETtoFile(const char* req_header, int& resp_len, const char* url, const char* fw_id, int timeout) {
             const int client_id = 0;
             const int pdp_context_id = 1;
+
+            at->sendAT("+QFLST");
+            if (!at->waitResponse())
+                return 0;
 
             // configure http parameters
             at->sendAT("+QHTTPCFG=\"contextid\",", pdp_context_id);
             if (!at->waitResponse())
-                return false;
+                return 0;
 
             at->sendAT("+QHTTPCFG=\"responseheader\",", 0);
             if (!at->waitResponse())
-                return false;
+                return 0;
             at->sendAT("+QHTTPCFG=\"requestheader\",", 1);
             if (!at->waitResponse())
-                return false;
+                return 0;
 
             // set the http url  AT+QHTTPURL
             at->sendAT("+QHTTPURL=", strlen(url));
             if (at->waitResponse(4000, "CONNECT" GSM_NL) != 1) {
-                return false;
+                return 0;
             }
             at->stream.write(url, strlen(url));
             if (!at->waitResponse())
-                return false;
+                return 0;
 
             // send GET request
             at->sendAT("+QHTTPGET=", 10000, ",", strlen(req_header));
             if (at->waitResponse(10000, "CONNECT" GSM_NL) != 1) {
-                return false;
+                return 0;
             }
             at->stream.write(req_header, strlen(req_header));
             if (!at->waitResponse(10000))
-                return false;
+                return 0;
 
             // parse response status urc code +QHTTPGET: <err>[,<httprspcode>[,<content_length>]]
-            if (at->waitResponse("+QHTTPGET: 0,200,") != 1) {
-                return false;
+            if (at->waitResponse("+QHTTPGET: ") != 1) {
+                return 0;
             }
+            if (at->stream.readStringUntil(',').toInt())
+                return at->stream.readStringUntil(',').toInt();
+            else
+                at->stream.readStringUntil(',');
+
             // get response length
             resp_len = at->stream.readStringUntil('\n').toInt();
-            Serial.printf("Response length is %d\n", resp_len);
             if (resp_len < 10000)
-                return false;
+                return 0;
 
-            // at->sendAT("+QHTTPREADFILE=?");
-            // if (!at->waitResponse())
-            //     return false;
-
-            // at->sendAT("+QFLST");
-            // if (!at->waitResponse())
-            //     return false;
-
-            at->sendAT("+QHTTPREADFILE=\"", "ufs:3.txt", "\"");
+            at->sendAT("+QHTTPREADFILE=\"ufs:", fw_id, ".ino.bin\",", timeout);
             if (!at->waitResponse(1000 * timeout))
-                return false;
+                return 0;
 
             // wait for response to be read to file
-            if (at->waitResponse(timeout * 1000, "+QHTTPREADFILE: 0" GSM_NL) != 1) {
-                return false;
+            if (at->waitResponse(timeout * 1000, "+QHTTPREADFILE: ") != 1) {
+                return 0;
             }
 
+            int resp_error = at->stream.readStringUntil('\n').toInt();
+            if (resp_error)
+                return resp_error;
+
+            return 1;
+        }
+
+        int openFile(const char* filename) {
+            // list files for debugging
+            at->sendAT("+QFLST");
+            if (!at->waitResponse())
+                return -1;
             // open the file to be read
-            at->sendAT("+QFOPEN=\"", filename, "\"", 2);
+            at->sendAT("+QFOPEN=\"ufs:", filename, "\",", 2);
             if (!at->waitResponse("+QFOPEN: "))
-                return false;
+                return -1;
 
             String file_handle = at->stream.readStringUntil('\n');
+            file_handle.trim();
+            return file_handle.toInt();
+        }
 
-            at->sendAT("+QFREAD=", file_handle);
-            if (at->waitResponse(4000, "CONNECT" GSM_NL) != 1) {
-                return false;
+        bool readFile(int file_handle, int end_pos, int start_pos = 0) {
+            // set the file pointer
+            if (start_pos) {
+                at->sendAT("+QFSEEK=", file_handle, ",", start_pos);
+                if (!at->waitResponse())
+                    return false;
             }
-            if (at->waitResponse(GSM_NL) != 1) {
+
+            at->sendAT("+QFREAD=", file_handle, ",", end_pos - start_pos);
+            if (at->waitResponse(4000, "CONNECT ") != 1)
                 return false;
-            }
+
+            at->stream.readStringUntil('\n');
+            return true;
+        }
+
+        bool closeFile(int file_handle) {
+            at->sendAT("+QFCLOSE=", file_handle);
+            if (!at->waitResponse())
+                return false;
 
             return true;
         }
