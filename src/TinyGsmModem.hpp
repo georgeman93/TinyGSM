@@ -156,6 +156,10 @@ class TinyGsmModem {
       res.replace("\r\n", " ");
       res.replace("\r", " ");
       res.trim();
+
+      // // temporarily open up USB port access
+      // thisModem().sendAT(GF("+QCFGEXT=\"disusb\",1"));
+      // thisModem().waitResponse();
       return res;
   }
 
