@@ -266,6 +266,32 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
+        bool checkHttpsStatus() {
+            at->sendAT("+QSSLSTATE=0");
+
+            if (!at->waitResponse("+QSSLSTATE:"))
+                return false;
+            if (at->stream.readStringUntil(',').toInt() != 0)
+                return false;
+            at->stream.readStringUntil(',');
+            at->stream.readStringUntil(',');
+            at->stream.readStringUntil(',');
+            at->stream.readStringUntil(',');
+
+            if (at->stream.readStringUntil(',').toInt() != 2) {
+                at->stream.readStringUntil('\n');
+                return false;
+            }
+            at->stream.readStringUntil(',');
+            return true;
+        }
+
+        void closeHttps() {
+            at->sendAT("+QSSLCLOSE=0");
+
+            at->waitResponse();
+        }
+
         bool sendHttps(const char* payload) {
             const int client_id = 0;
             const int max_send_size = 1024;
