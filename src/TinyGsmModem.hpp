@@ -151,6 +151,7 @@ class TinyGsmModem {
           return "";
       }
       // Do the replaces twice so we cover both \r and \r\n type endings
+      res.replace("AT+QGMR", "");
       res.replace("\r\nOK\r\n", "");
       res.replace("\rOK\r", "");
       res.replace("\r\n", " ");
