@@ -897,7 +897,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         if (executeTest(9)) return t[9];
 #endif
         sendAT(GF("+QLTS=1"));
-        if (waitResponse(2000L, GF("+QLTS: \"")) != 1) {
+        if (waitResponse(5000, GF("+QLTS: \"")) != 1) {
             return false;
         }
 

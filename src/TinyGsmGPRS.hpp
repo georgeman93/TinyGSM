@@ -92,7 +92,9 @@ class TinyGsmGPRS {
   // Gets the CCID of a sim card via AT+CCID
   String getSimCCIDImpl() {
     thisModem().sendAT(GF("+CCID"));
-    if (thisModem().waitResponse(GF("+CCID:")) != 1) { return ""; }
+    if (thisModem().waitResponse(5000, GF("+CCID:")) != 1) {
+        return "";
+    }
     String res = thisModem().stream.readStringUntil('\n');
     thisModem().waitResponse();
     res.trim();
