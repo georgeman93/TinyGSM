@@ -179,7 +179,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
-        bool publishMqtts(const char* topic, const char* payload) {
+        bool publishMqtts(const char* topic, const char* payload, bool no_reply = false) {
             const int tcp_conn_id = 0;
             const int msg_id = 1;
             const int qos = 1;
@@ -195,7 +195,8 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             if (at->waitResponse(5000, reply) != 1)
                 return false;
             at->streamSkipUntil('\n');  // in case there is an extra value for the number of retransmissions
-
+            if (no_reply)
+                return true;
             at->waitResponse(5000, data, "}\"");  // in case the reply comes quickly
 
             if (data.length()) {
