@@ -443,6 +443,76 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
+        bool enablegpsOneXTRA() {
+            at->sendAT("+QGPSXTRA=1");
+            if (!at->waitResponse())
+                return false;
+
+            return true;
+        }
+
+        int isgpsOneXTRAUpToDate() {
+            String XTRA_data_duration_str;
+
+            at->sendAT("+QGPSXTRADATA?");
+            if (at->waitResponse(5000, "+QGPSXTRADATA: ") != 1)
+                return false;
+            XTRA_data_duration_str = at->stream.readStringUntil(',');
+            at->stream.readStringUntil('\n');
+            return XTRA_data_duration_str.toInt();
+        }
+
+        bool updategpsOneXTRAData() {
+            // set the http url  AT+QHTTPURL
+            at->sendAT("+QHTTPURL=43");
+            if (at->waitResponse(4000, "CONNECT" GSM_NL) != 1) {
+                return false;
+            }
+            at->stream.write("http://xtrapath1.izatcloud.net/xtra3grc.bin", 43);
+            if (!at->waitResponse())
+                return false;
+
+            at->sendAT("+QHTTPGET=60");
+            if (!at->waitResponse(5000, "+QHTTPGET: "))
+                return false;
+
+            if (at->stream.readStringUntil(',').toInt()) {
+                at->stream.readStringUntil('\n');
+                return false;
+            } else
+                at->stream.readStringUntil('\n');
+
+            at->sendAT("+QHTTPREADFILE=\"ufs:xtra3grc.bin\",80");
+            if (!at->waitResponse(30000, "+QHTTPREADFILE: 0" GSM_NL))
+                return false;
+
+            // construct string of the current time eg "2016/01/03,15:34:50".
+            struct tm timeinfo;
+            getLocalTime(&timeinfo);
+            char timetext[100];
+            sprintf(timetext, "%d/%02d/%02d,%02d:%02d:%02d",
+                    timeinfo.tm_year + 1900,
+                    timeinfo.tm_mon + 1,
+                    timeinfo.tm_mday,
+                    timeinfo.tm_hour,
+                    timeinfo.tm_min,
+                    timeinfo.tm_sec);
+
+            at->sendAT("+QGPSXTRATIME=0,\"", timetext, "\",1,0,5000");
+            if (!at->waitResponse(5000))
+                return false;
+
+            at->sendAT("+QGPSXTRADATA=\"ufs:xtra3grc.bin\"");
+            if (!at->waitResponse(5000))
+                return false;
+
+            at->sendAT("+QFDEL=\"ufs:xtra3grc.bin\"");
+            if (!at->waitResponse(2000))
+                return false;
+
+            return true;
+        }
+
        private:
         MQTT_CALLBACK_SIGNATURE;
 
