@@ -451,15 +451,21 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
-        int isgpsOneXTRAUpToDate() {
-            String XTRA_data_duration_str;
+        time_t isgpsOneXTRAUpToDate() {
+            String datetime_str;
 
             at->sendAT("+QGPSXTRADATA?");
             if (at->waitResponse(5000, "+QGPSXTRADATA: ") != 1)
                 return false;
-            XTRA_data_duration_str = at->stream.readStringUntil(',');
-            at->stream.readStringUntil('\n');
-            return XTRA_data_duration_str.toInt();
+            at->stream.readStringUntil('"');
+            struct tm timeinfo;
+            timeinfo.tm_year = at->stream.readStringUntil('/').toInt() - 1900;
+            timeinfo.tm_mon = at->stream.readStringUntil('/').toInt() - 1;
+            timeinfo.tm_mday = at->stream.readStringUntil(',').toInt();
+            timeinfo.tm_hour = at->stream.readStringUntil(':').toInt();
+            timeinfo.tm_min = at->stream.readStringUntil(':').toInt();
+            timeinfo.tm_sec = at->stream.readStringUntil('.').toInt();
+            return mktime(&timeinfo);
         }
 
         bool updategpsOneXTRAData() {
