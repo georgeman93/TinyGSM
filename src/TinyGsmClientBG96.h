@@ -100,7 +100,14 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             while (at->stream.available())
                 at->stream.read();
 
+            at->sendAT("+QMTOPEN?");
+            if (!at->waitResponse())
+                return false;
+
             at->sendAT("+QMTCFG=", "\"", "SSL", "\",", tcp_conn_id, ",1,", ssl_context_id);
+            if (!at->waitResponse())
+                return false;
+            at->sendAT("+QMTCFG=", "\"", "keepalive", "\",", tcp_conn_id, ",3600");
             if (!at->waitResponse())
                 return false;
             at->sendAT("+QSSLCFG=", "\"sslversion", "\",", ssl_context_id, ",4");
