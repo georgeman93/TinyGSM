@@ -12,7 +12,7 @@
 #include "TinyGsmCommon.h"
 
 typedef struct SignalQuality {
-    String sysmode;
+    char sysmode[20];
     int lte_rssi;
     int lte_rsrp;
     int lte_sinr;
@@ -242,12 +242,12 @@ class TinyGsmModem {
   signal_quality getSignalQualityImpl() {
     signal_quality sigq;
     thisModem().sendAT(GF("+QCSQ"));
-    if (thisModem().waitResponse(GF("+QCSQ:")) != 1)
-    {
-      sigq.sysmode = "Error";
-      return sigq;
+    if (thisModem().waitResponse(GF("+QCSQ: \"")) != 1) {
+        strcpy(sigq.sysmode, "Error");
+        return sigq;
     }
-    sigq.sysmode = thisModem().stream.readStringUntil(',');
+    thisModem().stream.readStringUntil('\"').toCharArray(sigq.sysmode, 20);
+    thisModem().stream.readStringUntil(',');
     sigq.lte_rssi = thisModem().stream.readStringUntil(',').toInt();
     sigq.lte_rsrp = thisModem().stream.readStringUntil(',').toInt();
     sigq.lte_sinr = thisModem().stream.readStringUntil(',').toInt();
