@@ -149,12 +149,12 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             at->sendAT("+QMTOPEN=", tcp_conn_id, ",\"", host, "\",", port);
             at->waitResponse();
             sprintf(reply, "+QMTOPEN: %d,0" GSM_NL, tcp_conn_id);
-            if (at->waitResponse(15000, reply) != 1)
+            if (at->waitResponse(30000, reply) != 1)
                 return false;
             at->sendAT("+QMTCONN=", tcp_conn_id, ",\"", client_id, "\"");
 
             sprintf(reply, "+QMTCONN: %d,0,0" GSM_NL, tcp_conn_id);
-            if (at->waitResponse(15000, reply) != 1)
+            if (at->waitResponse(30000, reply) != 1)
                 return false;
 
             return true;
