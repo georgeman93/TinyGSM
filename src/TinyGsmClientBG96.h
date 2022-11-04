@@ -160,6 +160,19 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return true;
         }
 
+        bool mqttsConnected() {
+            const int tcp_conn_id = 0;
+            char reply[100];
+
+            at->sendAT("+QMTCONN?");
+            at->waitResponse();
+            sprintf(reply, "+QMTCONN: %d,0,0" GSM_NL, tcp_conn_id);
+            if (at->waitResponse(30000, reply) != 1)
+                return false;
+
+            return true;
+        }
+
         bool disconnectMqtts() {
             int tcp_conn_id = 0;
             char reply[100];
