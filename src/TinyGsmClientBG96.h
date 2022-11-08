@@ -79,6 +79,29 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         friend class TinyGsmBG96;
 
        public:
+        bool isAlive() {
+            // checks if modem can respond to AT command
+            return at->testAT();
+        }
+
+        bool configurePSM(bool enabled, int activeTime, int periodicTime) {
+            // TODO do the binary conversions to set the timers
+            // if (!enabled)
+            at->sendAT("+CPSMS=1,,,\"00000100\",\"00001111\"");
+            if (!at->waitResponse())
+                return false;
+
+            return true;
+        }
+
+        bool triggerPSM() {
+            at->sendAT("+QCFG=1");
+            if (!at->waitResponse())
+                return false;
+
+            return true;
+        }
+
         bool uploadFile(const char* fileName, const char* content) {
             at->sendAT("+QFDEL=", "\"", fileName, "\"");
             at->waitResponse();
@@ -165,9 +188,8 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             char reply[100];
 
             at->sendAT("+QMTCONN?");
-            at->waitResponse();
-            sprintf(reply, "+QMTCONN: %d,0,0" GSM_NL, tcp_conn_id);
-            if (at->waitResponse(30000, reply) != 1)
+            sprintf(reply, "+QMTCONN: %d,3" GSM_NL, tcp_conn_id);
+            if (at->waitResponse(5000, reply) != 1)
                 return false;
 
             return true;
