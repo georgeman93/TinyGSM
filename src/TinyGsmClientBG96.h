@@ -10,7 +10,8 @@
 
 #ifndef SRC_TINYGSMCLIENTBG96_H_
 #define SRC_TINYGSMCLIENTBG96_H_
-
+#include <bitset>
+#include <cmath>
 #include <functional>
 #define MQTT_CALLBACK_SIGNATURE std::function<void(char*, char*, unsigned int)> callback
 
@@ -84,10 +85,70 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             return at->testAT();
         }
 
-        bool configurePSM(bool enabled, int activeTime, int periodicTime) {
-            // TODO do the binary conversions to set the timers
-            // if (!enabled)
-            at->sendAT("+CPSMS=1,,,\"00000100\",\"00001111\"");
+        bool configurePSM(bool enabled, int activeTime = 300, int psmTime = 15 * 60) {
+            /**
+             * minimum periodic time is 30 seconds, maximum is 630 hours (26 days)
+             *
+             * minimum active time is 2 seconds, maximum is 6 hours
+             *
+             * we would probably want to set the active time to 3 minutes (max wake time)
+             * and the periodic time to whatever the sleep time is plus the active time
+             * this way, when we enter PSM directly we are not limited by the active time
+             *
+             */
+            if (!enabled) {
+                at->sendAT("+CPSMS=0");
+                if (!at->waitResponse())
+                    return false;
+
+                return true;
+            }
+
+            int maxSize5Bin = 32;
+            int periodicTime = psmTime + activeTime;
+            // Ee figure out the byte strings according to the formatting in the docs
+            // init memry for 3 char string
+
+            char activeTimeIncrementString[4];
+            char activeTimeValueString[6];
+            if (activeTime < maxSize5Bin * 2) {
+                strcpy(activeTimeIncrementString, "000");
+                strcpy(activeTimeValueString, std::bitset<5>(int(activeTime / 2)).to_string().c_str());
+            } else if (activeTime < maxSize5Bin * 60) {
+                strcpy(activeTimeIncrementString, "001");
+                strcpy(activeTimeValueString, std::bitset<5>(int(activeTime / 60)).to_string().c_str());
+            } else if (activeTime < maxSize5Bin * 360) {
+                strcpy(activeTimeIncrementString, "010");
+                strcpy(activeTimeValueString, std::bitset<5>(int(activeTime / 360)).to_string().c_str());
+            } else {
+                Serial.println("Active time too long");
+            }
+
+            char periodicTimeIncrementString[4];
+            char periodicTimeValueString[6];
+            if (periodicTime < maxSize5Bin * 2) {
+                strcpy(periodicTimeIncrementString, "011");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 2)).to_string().c_str());
+            } else if (periodicTime < maxSize5Bin * 30) {
+                strcpy(periodicTimeIncrementString, "100");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 30)).to_string().c_str());
+            } else if (periodicTime < maxSize5Bin * 60) {
+                strcpy(periodicTimeIncrementString, "101");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 60)).to_string().c_str());
+            } else if (periodicTime < maxSize5Bin * 600) {
+                strcpy(periodicTimeIncrementString, "000");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 600)).to_string().c_str());
+            } else if (periodicTime < maxSize5Bin * 3600) {
+                strcpy(periodicTimeIncrementString, "001");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 3600)).to_string().c_str());
+            } else if (periodicTime < maxSize5Bin * 36000) {
+                strcpy(periodicTimeIncrementString, "010");
+                strcpy(periodicTimeValueString, std::bitset<5>(int(periodicTime / 36000)).to_string().c_str());
+            } else {
+                Serial.println("Periodic time too long");
+            }
+
+            at->sendAT("+CPSMS=", enabled, ",,,\"", periodicTimeIncrementString, periodicTimeValueString, "\",\"", activeTimeIncrementString, activeTimeValueString, "\"");
             if (!at->waitResponse())
                 return false;
 
@@ -95,7 +156,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
         }
 
         bool triggerPSM() {
-            at->sendAT("+QCFG=1");
+            at->sendAT("+QCFG=\"psm/enter\",1");
             if (!at->waitResponse())
                 return false;
 
@@ -130,7 +191,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             at->sendAT("+QMTCFG=", "\"", "SSL", "\",", tcp_conn_id, ",1,", ssl_context_id);
             if (!at->waitResponse())
                 return false;
-            at->sendAT("+QMTCFG=", "\"", "keepalive", "\",", tcp_conn_id, ",3600");
+            at->sendAT("+QMTCFG=", "\"", "keepalive", "\",", tcp_conn_id, ",1200");
             if (!at->waitResponse())
                 return false;
             at->sendAT("+QSSLCFG=", "\"sslversion", "\",", ssl_context_id, ",4");
@@ -234,7 +295,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
             at->stream.write(payload, strlen(payload));
             at->stream.flush();
             sprintf(reply, "+QMTPUB: %d,%d,", tcp_conn_id, msg_id);
-            if (at->waitResponse(5000, reply) != 1)
+            if (at->waitResponse(20000, reply) != 1)
                 return false;
             at->streamSkipUntil('\n');  // in case there is an extra value for the number of retransmissions
             if (no_reply)
