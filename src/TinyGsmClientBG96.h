@@ -148,7 +148,7 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
                 Serial.println("Periodic time too long");
             }
 
-            at->sendAT("+CPSMS=", enabled, ",,,\"", periodicTimeIncrementString, periodicTimeValueString, "\",\"", activeTimeIncrementString, activeTimeValueString, "\"");
+            at->sendAT("+CPSMS=", enabled, ",\"", periodicTimeIncrementString, periodicTimeValueString, "\",\"", activeTimeIncrementString, activeTimeValueString, "\"");
             if (!at->waitResponse())
                 return false;
 
@@ -157,6 +157,9 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
 
         bool triggerPSM() {
             at->sendAT("+QCFG=\"psm/enter\",1");
+            if (!at->waitResponse())
+                return false;
+            at->sendAT("+QCFG=\"psm/urc\",1");
             if (!at->waitResponse())
                 return false;
 
